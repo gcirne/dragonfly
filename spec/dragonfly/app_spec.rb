@@ -3,8 +3,8 @@ require 'rack/mock'
 
 describe Dragonfly::App do
 
-  def make_request(app, url)
-    Rack::MockRequest.new(app).get(url)
+  def make_request(app, url, opts = {})
+    Rack::MockRequest.new(app).get(url, opts)
   end
 
   describe ".instance" do
@@ -132,6 +132,23 @@ describe Dragonfly::App do
       it "should use the fallback mime-type if the registered analyser doesn't respond to 'mime-type'" do
         @app.register_analyser(Class.new(Dragonfly::Analysis::Base))
         make_request(@app, '/some_uid.gog').headers['Content-Type'].should == 'application/octet-stream'
+      end
+    end
+    
+    describe "Conditional GET" do
+      before(:each) do
+        @app = Dragonfly::App[:images]
+      end
+      
+      it "should return 304 with empty body if If-None-Match header matches the unique signature" do
+        parameters = stub('parameters', :unique_signature => 'etag').as_null_object
+        @app.url_handler.stub!(:url_to_parameters).and_return(parameters)
+        temp_object = 'temp_object'
+        @app.stub!(:fetch).and_return(temp_object)
+
+        response = make_request(@app, '/test.jpg', {'HTTP_IF_NONE_MATCH' => 'etag'})
+        response.status.should == 304
+        response.body.should be_empty
       end
     end
   end

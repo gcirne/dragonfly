@@ -114,12 +114,17 @@ module Dragonfly
     def call(env)
       parameters = url_handler.url_to_parameters(env['PATH_INFO'], env['QUERY_STRING'])
       temp_object = fetch(parameters.uid, parameters)
-      [200, {
+      headers = {
         "Content-Type" => mime_type_for(parameters.format, temp_object),
         "Content-Length" => temp_object.size.to_s,
         "ETag" => parameters.unique_signature,
         "Cache-Control" => "public, max-age=#{cache_duration}"
-        }, temp_object]
+      }
+      if env["HTTP_IF_NONE_MATCH"] == parameters.unique_signature
+        [304, headers, ""]
+      else
+        [200, headers, temp_object]
+      end
     rescue UrlHandler::IncorrectSHA, UrlHandler::SHANotGiven => e
       warn_with_info(e.message, env)
       [400, {"Content-Type" => "text/plain"}, [e.message]]
